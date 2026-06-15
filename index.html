@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Vova Protein Contra</title>
+<style>
+  html,body{margin:0;height:100%;background:#111;overflow:hidden;font-family:Arial,Helvetica,sans-serif;color:white;touch-action:none}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#111}
+  canvas{background:#222;max-width:100vw;max-height:100vh;image-rendering:auto}
+  #ui{position:fixed;inset:0;pointer-events:none}
+  .btn{position:absolute;width:74px;height:74px;border-radius:50%;background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.35);color:white;font-weight:800;font-size:24px;display:flex;align-items:center;justify-content:center;pointer-events:auto;user-select:none;-webkit-user-select:none}
+  #left{left:18px;bottom:30px} #right{left:108px;bottom:30px} #jump{right:108px;bottom:30px} #hit{right:18px;bottom:30px;background:rgba(255,80,80,.25)}
+  #restart{position:absolute;right:14px;top:14px;padding:10px 14px;border-radius:12px;background:rgba(0,0,0,.38);border:1px solid rgba(255,255,255,.25);color:white;font-weight:700;pointer-events:auto}
+  #hint{position:absolute;left:14px;bottom:116px;font-size:12px;color:rgba(255,255,255,.75);background:rgba(0,0,0,.25);padding:8px 10px;border-radius:10px}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="ui">
+  <button id="restart">Restart</button>
+  <div id="hint">A/D или ←/→ — бег · Space/W — прыжок · J — удар</div>
+  <div class="btn" id="left">◀</div><div class="btn" id="right">▶</div><div class="btn" id="jump">▲</div><div class="btn" id="hit">👊</div>
+</div>
+<script>
+'use strict';
+const canvas=document.getElementById('game'), ctx=canvas.getContext('2d');
+const W=960,H=540; canvas.width=W; canvas.height=H;
+function fit(){const s=Math.min(innerWidth/W,innerHeight/H);canvas.style.width=W*s+'px';canvas.style.height=H*s+'px'} addEventListener('resize',fit); fit();
+const keys={l:false,r:false,u:false,h:false};
+addEventListener('keydown',e=>{if(['ArrowLeft','a','A'].includes(e.key))keys.l=true;if(['ArrowRight','d','D'].includes(e.key))keys.r=true;if(['ArrowUp','w','W',' '].includes(e.key))keys.u=true;if(['j','J'].includes(e.key))keys.h=true});
+addEventListener('keyup',e=>{if(['ArrowLeft','a','A'].includes(e.key))keys.l=false;if(['ArrowRight','d','D'].includes(e.key))keys.r=false;if(['ArrowUp','w','W',' '].includes(e.key))keys.u=false;if(['j','J'].includes(e.key))keys.h=false});
+function bind(id,k){const el=document.getElementById(id);['touchstart','mousedown'].forEach(t=>el.addEventListener(t,e=>{e.preventDefault();keys[k]=true}));['touchend','touchcancel','mouseup','mouseleave'].forEach(t=>el.addEventListener(t,e=>{e.preventDefault();keys[k]=false}))}
+bind('left','l');bind('right','r');bind('jump','u');bind('hit','h');document.getElementById('restart').onclick=()=>load(levelIndex);
+function rect(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y}
+const levels=[
+ {name:'Уровень 1: День груди',w:2600,start:{x:80,y:330},goal:2480,protein:[[430,335],[760,260],[1120,320],[1510,220],[1890,300],[2290,330]],burgers:[[620,360,150],[1280,360,220],[2050,360,180]],plats:[[0,445,2600,95],[260,360,270,22],[670,300,260,22],[1080,370,260,22],[1400,270,260,22],[1760,350,300,22],[2200,375,240,22]]},
+ {name:'Уровень 2: День ног',w:3300,start:{x:80,y:330},goal:3180,protein:[[360,350],[730,250],[1030,170],[1410,340],[1810,250],[2180,165],[2580,330],[2980,250]],burgers:[[520,360,220],[1190,360,180],[1660,360,240],[2370,360,220],[2860,360,170]],plats:[[0,445,3300,95],[290,370,230,22],[640,290,260,22],[960,215,220,22],[1300,385,250,22],[1680,305,260,22],[2050,225,250,22],[2460,370,260,22],[2880,300,250,22]]}
+];
+let levelIndex=0,p,cam,proteins,burgers,plats,state,msg,particles=[];
+function load(i){levelIndex=i;const L=levels[i];p={x:L.start.x,y:L.start.y,w:44,h:82,vx:0,vy:0,g:false,face:1,hp:5,score:0,atk:0,inv:0};cam=0;proteins=L.protein.map(a=>({x:a[0],y:a[1],w:26,h:34,t:0,got:false}));burgers=L.burgers.map(a=>({x:a[0],y:a[1],base:a[0],range:a[2],w:66,h:54,vx:1.1,hp:2,dead:false,hit:0}));plats=L.plats.map(a=>({x:a[0],y:a[1],w:a[2],h:a[3]}));state='play';msg='';particles=[]}
+function hitbox(){return {x:p.face>0?p.x+p.w-4:p.x-46,y:p.y+20,w:50,h:38}}
+function update(){if(state!=='play')return;const L=levels[levelIndex];p.vx=0;if(keys.l){p.vx=-5.4;p.face=-1} if(keys.r){p.vx=5.4;p.face=1} if(keys.u&&p.g){p.vy=-15.5;p.g=false} if(keys.h&&p.atk<=0){p.atk=18; const hb=hitbox(); burgers.forEach(b=>{if(!b.dead&&rect(hb,b)){b.hp--;b.hit=14;for(let i=0;i<8;i++)particles.push({x:b.x+b.w/2,y:b.y+25,vx:(Math.random()*5-2.5),vy:(Math.random()*-5),life:25});if(b.hp<=0)b.dead=true}})}
+ p.atk=Math.max(0,p.atk-1);p.inv=Math.max(0,p.inv-1);p.vy+=0.75;p.x+=p.vx;p.y+=p.vy;p.g=false;
+ plats.forEach(a=>{if(rect(p,a)&&p.vy>=0&&p.y+p.h-p.vy<=a.y+8){p.y=a.y-p.h;p.vy=0;p.g=true}});
+ p.x=Math.max(0,Math.min(L.w-p.w,p.x)); if(p.y>700){hurt(true)};
+ proteins.forEach(q=>{q.t+=0.08;if(!q.got&&rect(p,q)){q.got=true;p.score++;particles.push({x:q.x,y:q.y,vx:0,vy:-3,life:35,text:'+PROTEIN'})}});
+ burgers.forEach(b=>{if(b.dead)return;b.x+=b.vx;if(b.x<b.base-b.range||b.x>b.base+b.range)b.vx*=-1;b.hit=Math.max(0,b.hit-1);if(rect(p,b)&&p.inv<=0)hurt(false)});
+ particles.forEach(o=>{o.x+=o.vx||0;o.y+=o.vy||0;o.vy=(o.vy||0)+0.18;o.life--});particles=particles.filter(o=>o.life>0);
+ if(p.x>L.goal&&proteins.every(q=>q.got)){ if(levelIndex<levels.length-1){state='between';msg='Уровень пройден! Жми Restart для следующего'; setTimeout(()=>load(levelIndex+1),900)} else {state='win';msg='Победа! Вова собрал весь протеин и разнёс бургеры.'}}
+ if(p.hp<=0){state='dead';msg='Вова устал. Жми Restart.'}
+ cam=Math.max(0,Math.min(L.w-W,p.x-W*0.42));}
+function hurt(fall){p.hp--;p.inv=80;p.vy=fall?-8:-10;p.x-=p.face*45;for(let i=0;i<12;i++)particles.push({x:p.x+p.w/2,y:p.y+35,vx:Math.random()*6-3,vy:Math.random()*-5,life:24})}
+function bg(){const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#2b3140');g.addColorStop(1,'#171a22');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);ctx.save();ctx.translate(-cam*.35,0);for(let i=0;i<18;i++){let x=i*210;ctx.fillStyle='#343b4b';ctx.fillRect(x,90,120,250);ctx.fillStyle='#1d222d';ctx.fillRect(x+8,105,104,80);ctx.fillStyle='#596170';ctx.fillRect(x+18,205,84,9);ctx.fillRect(x+30,225,60,9);ctx.fillStyle='#777';ctx.fillRect(x+145,200,16,170);ctx.fillStyle='#999';ctx.beginPath();ctx.arc(x+153,185,42,0,Math.PI*2);ctx.stroke();ctx.fillRect(x+125,350,70,12)}ctx.restore();}
+function drawPlayer(){ctx.save();ctx.translate(p.x-cam,p.y);if(p.inv%10>5)ctx.globalAlpha=.45;if(p.face<0){ctx.translate(p.w,0);ctx.scale(-1,1)}
+ ctx.fillStyle='#ffd7a8';ctx.beginPath();ctx.arc(22,15,15,0,Math.PI*2);ctx.fill();ctx.fillStyle='#f4d33f';ctx.fillRect(8,0,28,9);ctx.fillStyle='#111';ctx.fillRect(28,14,5,3);
+ ctx.fillStyle='#f2f2f2';ctx.fillRect(8,32,30,34);ctx.fillStyle='#e6b07c';ctx.fillRect(2,35,10,28);ctx.fillRect(36,35,13,28);ctx.fillStyle='#ffd7a8';ctx.fillRect(1,58,13,11);ctx.fillRect(42,58,13,11);
+ ctx.fillStyle='#3157d8';ctx.fillRect(10,66,11,16);ctx.fillRect(26,66,11,16);ctx.fillStyle='#111';ctx.fillRect(7,80,16,6);ctx.fillRect(24,80,17,6);
+ if(p.atk>0){ctx.fillStyle='rgba(255,220,80,.7)';ctx.fillRect(40,30,45,20)}ctx.restore()}
+function drawProtein(q){if(q.got)return;let y=q.y+Math.sin(q.t)*5;ctx.fillStyle='#dff7ff';ctx.fillRect(q.x-cam,y,q.w,q.h);ctx.fillStyle='#27b4ff';ctx.fillRect(q.x-cam+4,y+6,q.w-8,18);ctx.fillStyle='white';ctx.font='10px Arial';ctx.fillText('WHEY',q.x-cam+2,y+19)}
+function drawBurger(b){if(b.dead)return;ctx.save();ctx.translate(b.x-cam,b.y);ctx.fillStyle=b.hit?'#fff':'#d28b3a';ctx.beginPath();ctx.ellipse(33,12,34,15,0,Math.PI,0);ctx.fill();ctx.fillStyle='#63bf4b';ctx.fillRect(2,18,62,7);ctx.fillStyle='#7a3d1f';ctx.fillRect(4,25,58,16);ctx.fillStyle='#f2d24b';ctx.fillRect(4,39,58,8);ctx.fillStyle='#d28b3a';ctx.beginPath();ctx.ellipse(33,50,32,10,0,0,Math.PI);ctx.fill();ctx.fillStyle='#111';ctx.fillRect(18,18,7,7);ctx.fillRect(43,18,7,7);ctx.restore()}
+function draw(){bg();ctx.save();ctx.translate(-cam,0);plats.forEach(a=>{ctx.fillStyle='#6f7680';ctx.fillRect(a.x,a.y,a.w,a.h);ctx.fillStyle='#9ca3ad';ctx.fillRect(a.x,a.y,a.w,5)});ctx.fillStyle='#4cff70';ctx.fillRect(levels[levelIndex].goal,365,20,80);ctx.restore();proteins.forEach(drawProtein);burgers.forEach(drawBurger);drawPlayer();particles.forEach(o=>{ctx.globalAlpha=Math.max(0,o.life/35);ctx.fillStyle=o.text?'#76e6ff':'#ffcf4d';ctx.font=o.text?'18px Arial':'12px Arial';ctx.fillText(o.text||'✦',o.x-cam,o.y);ctx.globalAlpha=1});
+ ctx.fillStyle='rgba(0,0,0,.45)';ctx.fillRect(15,15,340,84);ctx.fillStyle='white';ctx.font='22px Arial';ctx.fillText(levels[levelIndex].name,28,44);ctx.font='18px Arial';ctx.fillText('HP: '+'❤️'.repeat(Math.max(0,p.hp)),28,72);ctx.fillText('Protein: '+p.score+'/'+proteins.length,190,72);
+ if(state!=='play'){ctx.fillStyle='rgba(0,0,0,.65)';ctx.fillRect(0,0,W,H);ctx.fillStyle='white';ctx.textAlign='center';ctx.font='34px Arial';ctx.fillText(msg,W/2,H/2);ctx.font='18px Arial';ctx.fillText('Нажми Restart, чтобы начать заново',W/2,H/2+42);ctx.textAlign='left'}}
+function loop(){update();draw();requestAnimationFrame(loop)}load(0);loop();
+</script>
+</body>
+</html>
